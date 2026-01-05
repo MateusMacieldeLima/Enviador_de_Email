@@ -35,10 +35,24 @@ class SenderDao(BaseDao):
         Args:
             address (str): Email address to search for.
         Returns:
-            Optional[Dict[str, Any]]: Sender data if found, else None.
+            Optional[SenderModel]: Sender data if found, else None.
         """
         for s in self._data[self.data_name]:
             if s["address"].lower() == address.lower():
+                return SenderModel(**s)
+        return None
+    
+    def find_by_id(self, sender_id: int) -> Optional[SenderModel]:
+        """
+        Find a sender by ID.
+
+        Args:
+            sender_id (int): ID of the sender to search for.
+        Returns:
+            Optional[SenderModel]: Sender data if found, else None.
+        """
+        for s in self._data[self.data_name]:
+            if s["sender_id"] == sender_id:
                 return SenderModel(**s)
         return None
 
@@ -53,9 +67,6 @@ class SenderDao(BaseDao):
         """
         existing = self.find_by_address(sender.address)
         if existing:
-            if existing.app_password != sender.app_password:
-                existing.app_password = sender.app_password
-                self._save()
             return existing
         
         new_id = self._data["next_id"]
@@ -70,6 +81,27 @@ class SenderDao(BaseDao):
         logger.info(f"[DAO] Added sender: {sender.address} (id={new_id})")
 
         return sender
+    
+    def edit(self, sender: SenderModel) -> SenderModel:
+        """
+        Edit an existing sender.
+
+        Args:
+            sender (SenderModel): Sender data to edit.
+        Returns:
+            SenderModel: The edited sender data.
+        """
+        for idx, s in enumerate(self._data[self.data_name]):
+            if s["sender_id"] == sender.sender_id:
+                self._data[self.data_name][idx] = sender.__dict__
+
+                self._save()
+
+                logger.info(f"[DAO] Edited sender id={sender.sender_id}")
+
+                return sender
+        
+        raise ValueError(f"Sender with id={sender.sender_id} not found.")
 
     def delete(self, sender_id: int) -> bool:
         """

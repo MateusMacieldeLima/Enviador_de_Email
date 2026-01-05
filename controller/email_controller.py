@@ -6,7 +6,10 @@ import time
 
 from models.email_model import EmailModel
 from models.sender_model import SenderModel
+from models.app_password_model import AppPasswordModel
+
 from utils.exceptions import DailyLimitExceeded, RateLimitExceeded
+from utils.fernet_crypto import decrypt_password
 
 logger = logging.getLogger(__name__)
 
@@ -15,20 +18,32 @@ class EmailController:
     Controller that handles email sending.
 
     Args:
-        app_password: application-specific password for SMTP auth
-        sender_address: sender email address
+        sender: SenderModel instance containing sender email details
     """
-    def __init__(self, sender: SenderModel):
+    def __init__(self, sender: SenderModel, app_password: AppPasswordModel):
         logger.info(f"[INIT] Initializing EmailController for: {sender.address}")
 
         self.sender = sender
+
+        try:
+            logger.debug("[DECRYPT] Decrypting application password...")
+            self.password = decrypt_password(
+                service_name="enviador_de_email",
+                crypto_scheme=app_password.crypto_scheme,
+                ciphertext=app_password.ciphertext,
+                key_id=app_password.key_id
+            )
+            logger.debug(f"[OK] Application password decrypted successfully")
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to decrypt application password: {e}")
+            raise
         
         logger.debug("[SMTP] Connecting to SMTP server...")
         self.smtp_server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
         logger.debug("[OK] SMTP connection established")
-
+        
         logger.debug("[AUTH] Logging in to SMTP server...")
-        self.smtp_server.login(self.sender.address, self.sender.app_password)
+        self.smtp_server.login(self.sender.address, self.password)
         logger.info("[OK] SMTP login successful")
 
     def send_mass_emails(self, recipient_list: list[str], subject: str, body: str, attachments: list | None = None, progress = None, cancel_check = None) -> dict:

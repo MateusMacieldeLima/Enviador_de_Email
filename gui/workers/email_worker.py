@@ -73,7 +73,7 @@ class EmailWorker(QThread):
                 msg = 'Emails enviados com sucesso'
                 self.finished.emit(True, msg)
             else:
-                msg = f'{result['success']} enviados, {result['failed']} falharam'
+                msg = f"{result['success']} enviados, {result['failed']} falharam"
                 self.finished.emit(False, msg)
         except EmailServiceError as e:
             self.finished.emit(False, str(e))

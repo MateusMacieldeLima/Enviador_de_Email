@@ -17,11 +17,9 @@ from models.sender_model import SenderModel
 
 logger = logging.getLogger(__name__)
 
-
 class EmailService:
     """
-    Serviço central para gerenciar operações de email.
-    Coordena entre DAOs, Controller e validações.
+    Service that manages email sending operations and controllers.
     """
 
     def __init__(self):
@@ -34,10 +32,20 @@ class EmailService:
         self.recipient_controller = RecipientController(self.recipient_dao, self.group_dao)
         self.group_controller = RecipientGroupController(self.recipient_dao, self.group_dao)
 
-    def configure_sender(self, sender: SenderModel) -> bool:
+    def setup_email_controller(self, sender: SenderModel) -> bool:
+        """
+        Set up the email sender.
+
+        Args:
+            sender: SenderModel instance with sender email details
+
+        Returns:
+            True if configuration is successful, raises EmailServiceError otherwise.
+        """
         logger.info(f"[CONFIG] Configurando remetente: {sender.address}")
         try:
-            self.email_controller = EmailController(sender)
+            app_password = self.sender_controller.get_password_for_sender(sender)
+            self.email_controller = EmailController(sender, app_password)
             logger.info("[OK] Remetente configurado com sucesso")
             return True
         except Exception as e:

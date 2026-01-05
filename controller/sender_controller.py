@@ -3,8 +3,10 @@ import logging
 from typing import List
 
 from dao.sender_dao import SenderDao
+from dao.app_password_dao import AppPasswordDao
 
 from models.sender_model import SenderModel
+from models.app_password_model import AppPasswordModel 
 
 from utils.exceptions import EmailServiceError
 
@@ -16,10 +18,12 @@ class SenderController:
 
     Args:
         sender_dao (SenderDao): DAO for sender data management.
+        app_password_dao (AppPasswordDao): DAO for app password management.
     """
 
-    def __init__(self, sender_dao: SenderDao = None):
+    def __init__(self, sender_dao: SenderDao = None, app_password_dao: AppPasswordDao = None):
         self.sender_dao = sender_dao or SenderDao()
+        self.app_password_dao = app_password_dao or AppPasswordDao()
 
         logger.info("[INIT] SenderController initialized")
 
@@ -35,9 +39,14 @@ class SenderController:
             SenderModel: The added sender data.
         """
         try:
-            sender = SenderModel(address=address, app_password=app_password)
+            sender = self.sender_dao.add(SenderModel(address=address))
 
-            sender = self.sender_dao.add(sender)
+            ap = AppPasswordModel(ciphertext=app_password, sender_id=sender.sender_id)
+            ap = self.app_password_dao.add(ap)
+
+            sender.app_password_id = ap.app_password_id
+
+            self.sender_dao.edit(sender)
 
             logger.info(f"[SERVICE] Sender persisted: {address}")
 
@@ -68,10 +77,26 @@ class SenderController:
         """
 
         try:
+            sender = self.sender_dao.find_by_id(sender_id)
+            if not sender:
+                raise ValueError(f"Sender with id={sender_id} not found.")
+            
+            self.app_password_dao.delete(sender.app_password_id)
+            
             return self.sender_dao.delete(sender_id)
         except Exception as e:
             logger.error(f"[ERRO] Erro ao deletar remetente: {e}")
 
             raise EmailServiceError(f"Erro ao deletar remetente: {e}")
         
-    
+    def get_password_for_sender(self, sender: SenderModel) -> AppPasswordModel:
+        """
+        Retrieve the app password for a given sender.
+
+        Args:
+            sender (SenderModel): The sender whose app password is to be retrieved.
+        
+        Returns:
+            AppPasswordModel: The app password model for the sender.
+        """
+        return self.app_password_dao.find_by_id(sender.app_password_id)

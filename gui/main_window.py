@@ -20,6 +20,7 @@ from core.email_service import EmailService
 from utils.exceptions import EmailServiceError
 from utils.validators import validate_required_fields
 from utils.files import get_base_path, add_to_sys_path, join_paths, file_exists
+from utils.fernet_crypto import generate_and_store_master_key
 
 # Configurar logging para debug
 logging.basicConfig(
@@ -306,7 +307,16 @@ class MainWindow(QMainWindow):
             
             if sel:
                 self.sender = sel
-                self.email_service.configure_sender(self.sender)
+
+                try:
+                    self.email_service.setup_email_controller(self.sender)
+                except Exception as e:
+                    QMessageBox.critical(self, "Erro na Configuração", f"Falha ao configurar remetente:\n{e}")
+                    logger.error(f"[ERROR] Failed to set up email controller: {e}")
+                    self.statusBar().showMessage("Erro ao configurar remetente", 5000)
+                    
+                    return
+
                 # habilitar envio se houver recipients
                 if self.recipients:
                     try:
@@ -352,13 +362,19 @@ def main():
     print("=" * 50)
     
     try:
+        try:
+            generate_and_store_master_key("enviador_de_email")
+            logger.info("[OK] Master key verificada/gerada com sucesso")
+        except Exception as e:
+            logger.error(f"[ERRO] Falha ao gerar/verificar master key: {e}")
+
         app = QApplication(sys.argv)
         logger.debug("[OK] QApplication criado")
 
-        iconPath = join_paths(get_base_path(), "static/images/icon.ico")
+        icon_path = join_paths(get_base_path(), "static/images/icon.ico")
         try:
-            if file_exists(iconPath):
-                app.setWindowIcon(QIcon(iconPath))
+            if file_exists(icon_path):
+                app.setWindowIcon(QIcon(icon_path))
                 logger.debug("[OK] Icone definido com sucesso")
             else:
                 logger.warning("[WARN] Arquivo de icone nao encontrado")
