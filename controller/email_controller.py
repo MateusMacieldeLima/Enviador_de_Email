@@ -68,7 +68,7 @@ class EmailController:
                 logger.debug(f"[EMAIL] Sending email {i}/{len(recipient_list)} to: {recipient}")
                 attempt = 0
                 attempt_limit = 5
-                sleep_time = 60
+                sleep_time = 100
 
                 for j in range(attempt_limit):
                     attempt += 1
