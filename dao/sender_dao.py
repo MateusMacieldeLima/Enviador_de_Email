@@ -76,7 +76,10 @@ class SenderDao(BaseDao):
 
         self._data["next_id"] += 1
 
-        self._save()
+        try:
+            self.upsert_one(sender.__dict__)
+        except Exception:
+            self._save()
 
         logger.info(f"[DAO] Added sender: {sender.address} (id={new_id})")
 
@@ -94,8 +97,10 @@ class SenderDao(BaseDao):
         for idx, s in enumerate(self._data[self.data_name]):
             if s["sender_id"] == sender.sender_id:
                 self._data[self.data_name][idx] = sender.__dict__
-
-                self._save()
+                try:
+                    self.upsert_one(sender.__dict__)
+                except Exception:
+                    self._save()
 
                 logger.info(f"[DAO] Edited sender id={sender.sender_id}")
 

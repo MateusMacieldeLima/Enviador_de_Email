@@ -1,4 +1,5 @@
 import logging
+import requests
 import pandas as pd
 import re
 
@@ -21,7 +22,7 @@ class RecipientDao(BaseDao):
     
     """
     def __init__(self, path: Optional[str] = None):
-        super().__init__(path, data_name="recipients")
+        super().__init__(path, data_name="recipients", remote_only=True)
 
     def list_all(self) -> List[RecipientModel]:
         """
@@ -66,7 +67,35 @@ class RecipientDao(BaseDao):
 
         self._data["next_id"] += 1
 
-        self._save()
+        # Try remote upsert only for this item to make manual UI inserts persist immediately
+        try:
+            self.upsert_one(recipient.__dict__)
+        except Exception as e:
+            # Log exception details, including HTTP response body when available
+            try:
+                logger.exception("Error upserting recipient %s: %s", recipient.address, e)
+                if isinstance(e, requests.exceptions.RequestException) and hasattr(e, 'response') and e.response is not None:
+                    logger.error('Upsert response status: %s', e.response.status_code)
+                    logger.error('Upsert response text: %s', e.response.text)
+            except Exception:
+                pass
+
+            # If remote reports a conflict (409), try reloading cache and return existing by address
+            try:
+                if isinstance(e, requests.exceptions.HTTPError) and getattr(e.response, 'status_code', None) == 409:
+                    try:
+                        self._load()
+                        existing2 = self.find_by_address(recipient.address)
+                        if existing2:
+                            logger.info("[DAO] Conflict on add; using existing recipient for %s", recipient.address)
+                            return existing2
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # fallback to full save
+            self._save()
 
         logger.info(f"[DAO] Added recipient: {recipient.address} (id={new_id})")
 
@@ -87,7 +116,10 @@ class RecipientDao(BaseDao):
                     r["address"] = recipient.address
                 if recipient.group_id is not None:
                     r["group_id"] = recipient.group_id
-                self._save()
+                try:
+                    self.upsert_one(r)
+                except Exception:
+                    self._save()
                 return RecipientModel(**r)
         raise ValueError("Recipient not found")
 
@@ -156,14 +188,41 @@ class RecipientDao(BaseDao):
         for column in df.columns:
             logger.debug(f"[COLUMN] Processing column: {column}")
             for item in df[column]:
-                if isinstance(item, str):
-                    found_addresses = re.findall(regex_address, item)
-                    if found_addresses:
-                        logger.debug(f"[EMAIL] Found addresses in '{item[:50]}...': {found_addresses}")
-                    addresses.extend(found_addresses)
+                try:
+                    # Skip missing values
+                    import pandas as _pd
+                    if _pd.isna(item):
+                        continue
 
-        addresses = list(set(addresses))
-        logger.info(f"[EMAIL] Unique addresses found: {len(addresses)}")
-        logger.debug(f"[EMAIL] Emails: {addresses[:10]}{'...' if len(addresses) > 10 else ''}")
+                    # Coerce to string and search
+                    text = str(item).strip()
+                    if not text:
+                        continue
 
-        return [e.lower() for e in sorted(set(addresses))]
+                    # If cell contains common separators, split and check each
+                    parts = re.split(r'[;,\|/\s]+', text)
+                    found_any = []
+                    for part in parts:
+                        found = re.findall(regex_address, part)
+                        if found:
+                            found_any.extend(found)
+
+                    # also search the whole cell as fallback
+                    if not found_any:
+                        found_any = re.findall(regex_address, text)
+
+                    if found_any:
+                        logger.debug(f"[EMAIL] Found addresses in '{text[:50]}...': {found_any}")
+                    addresses.extend(found_any)
+                except Exception:
+                    # ignore problematic cells but continue
+                    continue
+
+        # Preserve duplicates and original discovery order so the import total
+        # reflects the number of entries in the source file (user requirement).
+        # Normalize to lowercase but keep duplicates.
+        normalized = [e.lower() for e in addresses]
+        logger.info(f"[EMAIL] Addresses found (including duplicates): {len(normalized)}")
+        logger.debug(f"[EMAIL] Emails (first 10): {normalized[:10]}{'...' if len(normalized) > 10 else ''}")
+
+        return normalized

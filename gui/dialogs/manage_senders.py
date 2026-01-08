@@ -103,24 +103,32 @@ class ManageSendersDialog(QDialog):
 
             break
 
-    def get_item_list_widget(self) -> QListWidget:
+    def get_item_list_widget(self) -> Optional[str]:
         """
-        Get the QListWidget containing the senders.
+        Get the text of the selected item in the QListWidget.
 
         Returns:
-            QListWidget: The list widget with senders.
+            Optional[str]: The text of the selected item, or None if nothing selected.
         """
 
-        lst = lst = getattr(self.ui, 'list_widget', None)
+        lst = getattr(self.ui, 'list_widget', None)
 
         if not lst:
-            return
-        
-        row = lst.currentRow()
-        if row < 0:
-            return
+            return None
 
-        return lst.item(row).text()
+        try:
+            row = lst.currentRow()
+        except Exception:
+            return None
+
+        if row is None or row < 0:
+            return None
+
+        item = lst.item(row)
+        if not item:
+            return None
+
+        return item.text()
     
     def get_sender_by_selected_item(self) -> Optional[SenderModel]:
         """
@@ -129,11 +137,18 @@ class ManageSendersDialog(QDialog):
         Returns:
             Optional[SenderModel]: The selected sender model, or None if not found.
         """
-        address = self.get_item_list_widget()
-        senders = self.controller.list_senders()
-        sender = next((s for s in senders if s.address == address), None)
+        try:
+            address = self.get_item_list_widget()
+            if not address:
+                return None
 
-        return sender
+            senders = self.controller.list_senders()
+            sender = next((s for s in senders if s.address == address), None)
+
+            return sender
+        except Exception as e:
+            logger.error(f"[ERRO] Falha ao obter remetente selecionado: {e}")
+            return None
 
     def on_delete(self):
         """
@@ -161,14 +176,17 @@ class ManageSendersDialog(QDialog):
 
         sender = self.get_sender_by_selected_item()
 
-        if sender:
-            try:
-                self.selected_sender = sender
+        if not sender:
+            QMessageBox.warning(self, "Remetente", "Nenhum remetente selecionado.")
+            return
 
-                logger.info(f"[OK] Remetente selecionado: {sender.address} (id={sender.sender_id})")
-                QMessageBox.information(self, "Remetente", f"Remetente '{sender.address}' selecionado com sucesso.")
+        try:
+            self.selected_sender = sender
 
-                self.accept()
-            except Exception as e:
-                logger.error(f"[SELECT] Falha ao configurar remetente: {e}")
-                QMessageBox.critical(self, "Erro", f"Falha ao configurar remetente: {e}")
+            logger.info(f"[OK] Remetente selecionado: {sender.address} (id={sender.sender_id})")
+            QMessageBox.information(self, "Remetente", f"Remetente '{sender.address}' selecionado com sucesso.")
+
+            self.accept()
+        except Exception as e:
+            logger.error(f"[SELECT] Falha ao configurar remetente: {e}")
+            QMessageBox.critical(self, "Erro", f"Falha ao configurar remetente: {e}")

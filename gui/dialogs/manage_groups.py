@@ -59,7 +59,23 @@ class ManageGroupsDialog(QDialog):
             groups = self.group_controller.list_groups()
 
             for g in groups:
-                item = QListWidgetItem(f"{g.name} - {len(self.group_controller.list_group_recipients(g.group_id))} destinatários")
+                # try to get member ids from membership DAO for debugging
+                try:
+                    member_ids = []
+                    if hasattr(self.group_controller, 'membership_dao'):
+                        try:
+                            member_ids = self.group_controller.membership_dao.list_group_members(g.group_id)
+                        except Exception:
+                            member_ids = []
+                    # fallback to deriving from recipients if membership table empty
+                    members = self.group_controller.list_group_recipients(g.group_id)
+                    count = len(members)
+                    logger.debug(f"[GROUP] {g.name} (id={g.group_id}) membership_ids={member_ids} resolved_count={count}")
+                except Exception as e:
+                    logger.error(f"[ERRO] Falha ao obter membros para grupo {g.name}: {e}")
+                    count = 0
+
+                item = QListWidgetItem(f"{g.name} - {count} destinatários")
                 lst.addItem(item)
         except Exception as e:
             logger.error(f"[ERRO] Falha ao recarregar lista de grupos: {e}")
@@ -78,10 +94,21 @@ class ManageGroupsDialog(QDialog):
                 path, _ = QFileDialog.getOpenFileName(self, "Selecionar arquivo", filter="Arquivos suportados (*.csv *.xlsx *.xls)")
                 if path:
                     addresses = self.recipient_controller.process_recipient_file(path)
-                    
+
+                    added = 0
+                    failed = 0
                     for a in addresses:
-                        rec = self.recipient_controller.add_recipient(a, group_id=group.group_id)
-                        self.group_controller.add_recipient_to_group(rec.recipient_id, group.group_id)
+                        try:
+                            # add_recipient already associates the recipient with the group when group_id is passed,
+                            # so avoid duplicating the association call which can cause conflicts.
+                            rec = self.recipient_controller.add_recipient(a, group_id=group.group_id)
+                            if rec:
+                                added += 1
+                        except Exception as ex:
+                            failed += 1
+                            logger.warning(f"[WARN] Falha ao adicionar email {a}: {ex}")
+
+                    logger.info(f"[IMPORT] Import finished: {added} added, {failed} failed, {len(addresses)} total")
                 
                 self.reload()
         except Exception as e:
@@ -160,6 +187,7 @@ class ManageGroupsDialog(QDialog):
             if group:
                 members = self.group_controller.list_group_recipients(group.group_id)
                 emails = [m.address for m in members]
+                logger.debug(f"[SELECT_GROUP] Selected group {group.name} (id={group.group_id}) members_count={len(members)} emails_sample={emails[:5]}")
                 self.selected_group_emails = emails
                 self.selected_group = group.name
                 self.accept()

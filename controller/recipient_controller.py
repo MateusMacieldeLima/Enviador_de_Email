@@ -4,6 +4,7 @@ from typing import List
 
 from dao.recipient_dao import RecipientDao
 from dao.recipient_group_dao import RecipientGroupDao
+from dao.recipient_group_membership_dao import RecipientGroupMembershipDao
 
 from models.recipient_model import RecipientModel
 
@@ -23,6 +24,7 @@ class RecipientController:
     def __init__(self, recipient_dao: RecipientDao = None, group_dao: RecipientGroupDao = None):
         self.recipient_dao = recipient_dao or RecipientDao()
         self.group_dao = group_dao or RecipientGroupDao()
+        self.membership_dao = RecipientGroupMembershipDao()
 
         logger.info("[INIT] RecipientController initialized")
 
@@ -43,14 +45,26 @@ class RecipientController:
             logger.info(f"[SERVICE] Recipient added: {address}")
 
             if group_id and rec and isinstance(rec, RecipientModel) and rec.recipient_id is not None:
+                # Prefer membership table for many-to-many; fallback to legacy group list
                 try:
-                    self.group_dao.add_recipient_to_group(group_id, rec.recipient_id)
+                    try:
+                        self.membership_dao.add_membership(rec.recipient_id, group_id)
+                    except Exception:
+                        # fallback to legacy behavior
+                        self.group_dao.add_recipient_to_group(group_id, rec.recipient_id)
                 except Exception as grp_err:
                     logger.warning(f"[WARN] Falha ao associar recipient {rec.recipient_id} ao grupo {group_id}: {grp_err}")
 
             return rec
         except Exception as e:
-            logger.error(f"[ERRO] Erro ao adicionar destinatario: {e}")
+            # Log detailed info including HTTP response when available
+            try:
+                logger.exception("[ERRO] Erro ao adicionar destinatario %s: %s", address, e)
+                if hasattr(e, 'response') and e.response is not None:
+                    logger.error('Response status: %s', e.response.status_code)
+                    logger.error('Response text: %s', e.response.text)
+            except Exception:
+                pass
             raise EmailServiceError(f"Erro ao adicionar destinatario: {e}")
 
     def list_recipients(self) -> List[RecipientModel]:

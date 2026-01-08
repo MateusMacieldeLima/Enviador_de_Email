@@ -45,12 +45,16 @@ class EmailService:
         logger.info(f"[CONFIG] Configurando remetente: {sender.address}")
         try:
             app_password = self.sender_controller.get_password_for_sender(sender)
+            if not app_password:
+                logger.error("[ERRO] Nenhuma senha de aplicativo associada a este remetente")
+                return False
+
             self.email_controller = EmailController(sender, app_password)
             logger.info("[OK] Remetente configurado com sucesso")
             return True
         except Exception as e:
             logger.error(f"[ERRO] Erro ao configurar remetente: {e}")
-            raise EmailServiceError(f"Erro ao configurar remetente: {e}")
+            return False
     
 
     
