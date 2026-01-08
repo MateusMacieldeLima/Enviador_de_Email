@@ -27,13 +27,18 @@ class EmailController:
 
         try:
             logger.debug("[DECRYPT] Decrypting application password...")
-            self.password = decrypt_password(
-                service_name="enviador_de_email",
-                crypto_scheme=app_password.crypto_scheme,
-                ciphertext=app_password.ciphertext,
-                key_id=app_password.key_id
-            )
-            logger.debug(f"[OK] Application password decrypted successfully")
+            # Support storing plaintext fallback (crypto_scheme == 'plain')
+            if getattr(app_password, 'crypto_scheme', None) == 'plain':
+                self.password = app_password.ciphertext
+                logger.debug("[OK] Application password used as plain text")
+            else:
+                self.password = decrypt_password(
+                    service_name="enviador_de_email",
+                    crypto_scheme=app_password.crypto_scheme,
+                    ciphertext=app_password.ciphertext,
+                    key_id=app_password.key_id
+                )
+                logger.debug(f"[OK] Application password decrypted successfully")
         except Exception as e:
             logger.error(f"[ERROR] Failed to decrypt application password: {e}")
             raise
@@ -83,7 +88,7 @@ class EmailController:
                 logger.debug(f"[EMAIL] Sending email {i}/{len(recipient_list)} to: {recipient}")
                 attempt = 0
                 attempt_limit = 5
-                sleep_time = 60
+                sleep_time = 100
 
                 for j in range(attempt_limit):
                     attempt += 1

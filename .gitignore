@@ -202,6 +202,7 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 email_sender_debug.log
+senhas_de_app.txt
 # Marimo
 marimo/_static/
 marimo/_lsp/

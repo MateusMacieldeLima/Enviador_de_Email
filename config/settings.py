@@ -47,3 +47,19 @@ UI_CONFIG = {
     'status_message_duration': 3000,   # 3 segundos
     'email_preview_limit': 5
 }
+
+
+# Supabase configuration (optional). Set 'enabled' to True and provide 'url' and 'key'
+# to enable remote storage via Supabase. You can also override via environment
+# variables or the config/supabase helper in the app.
+SUPABASE = {
+    'enabled': True,
+    'url': 'https://boutbnbnkeipnhaedafk.supabase.co',
+    'key': 'sb_publishable_OEp15vZlZL5skAgnL47uEA_ZafQ089m',
+    'table_map': {
+        'senders': 'sender',
+        'app_passwords': 'app_password',
+        'recipients': 'recipient',
+        'groups': 'recipient_group'
+    }
+}

@@ -57,8 +57,16 @@ class AppPasswordDao(BaseDao):
             app_password.crypto_scheme = get_default_scheme()
             app_password.key_id = get_default_key_id()
 
-            encrypted = encrypt_password("enviador_de_email", app_password.ciphertext, app_password.key_id)
-            app_password.ciphertext = encrypted
+            try:
+                encrypted = encrypt_password("enviador_de_email", app_password.ciphertext, app_password.key_id)
+                app_password.ciphertext = encrypted
+            except Exception as e:
+                # If encryption fails (e.g. master key missing in keyring),
+                # fallback to storing the provided value as-is and mark scheme
+                # as 'plain' so higher layers can detect it.
+                logger.warning(f"[WARN] Encryption failed, storing plaintext fallback: {e}")
+                app_password.crypto_scheme = "plain"
+                app_password.key_id = None
 
         existing = self.find_by_id(app_password.app_password_id)
         if existing:
@@ -76,7 +84,10 @@ class AppPasswordDao(BaseDao):
 
         self._data["next_id"] += 1
 
-        self._save()
+        try:
+            self.upsert_one(app_password.__dict__)
+        except Exception:
+            self._save()
 
         logger.info(f"[DAO] Added app password: {app_password.ciphertext} (id={new_id})")
 

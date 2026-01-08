@@ -99,4 +99,21 @@ class SenderController:
         Returns:
             AppPasswordModel: The app password model for the sender.
         """
-        return self.app_password_dao.find_by_id(sender.app_password_id)
+        # Defensive: if sender has no app_password_id, try to find by sender_id
+        if not sender:
+            return None
+
+        if getattr(sender, 'app_password_id', None):
+            ap = self.app_password_dao.find_by_id(sender.app_password_id)
+            if ap:
+                return ap
+
+        # Fallback: search all app passwords for one matching sender_id
+        try:
+            for ap in self.app_password_dao.list_all():
+                if getattr(ap, 'sender_id', None) == getattr(sender, 'sender_id', None):
+                    return ap
+        except Exception:
+            pass
+
+        return None

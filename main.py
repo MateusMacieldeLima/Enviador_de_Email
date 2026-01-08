@@ -1,4 +1,15 @@
 import sys
+import os
+from pathlib import Path
+
+# Ensure project root (and its parent) are on sys.path so internal packages (e.g., `dao`) can be imported
+# This handles running the script from different working directories or packaging setups.
+project_root = str(Path(__file__).resolve().parent)
+project_parent = str(Path(__file__).resolve().parent.parent)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+if project_parent not in sys.path:
+    sys.path.insert(0, project_parent)
 import logging
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
